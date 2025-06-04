@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: insightflow-postgres
+    environment:
+      POSTGRES_USER: insightflow
+      POSTGRES_PASSWORD: insightflow_password
+      POSTGRES_DB: insightflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d
+    networks:
+      - insightflow-network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U insightflow"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  insightflow-service-rss:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: insightflow-service-rss
+    env_file:
+      - .env
+    environment:
+      - RUN_ON_STARTUP=true 
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=insightflow
+      - POSTGRES_USER=insightflow
+      - POSTGRES_PASSWORD=insightflow_password
+    restart: always
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - insightflow-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  insightflow-network:
+    driver: bridge

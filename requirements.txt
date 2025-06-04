@@ -1,0 +1,39 @@
+# Core dependencies
+pydantic==2.6.4
+python-dotenv==1.0.1
+loguru==0.7.2
+
+# Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.28
+alembic==1.13.1
+
+# RSS and web scraping
+feedparser==6.0.10
+aiohttp==3.9.3
+requests==2.31.0
+
+# Data processing
+numpy==1.26.4
+scikit-learn==1.4.0
+
+# Telegram
+python-telegram-bot==20.8
+
+# Scheduling
+schedule==1.2.1
+
+# Async support
+asyncio==3.4.3
+
+# Text processing and tokenization
+tiktoken==0.6.0
+
+# Date and timezone
+tzdata==2024.1
+
+# Configuration
+pyyaml==6.0.1
+
+# Utilities
+structlog==24.1.0

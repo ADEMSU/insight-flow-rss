@@ -1,0 +1,230 @@
+{
+  "sources": [
+    {
+      "name": "Банки.ру Новости",
+      "url": "https://www.banki.ru/xml/news.rss",
+      "category": "finance"
+    },
+    {
+      "name": "Forbes",
+      "url": "https://www.forbes.com/real-time/feed/",
+      "category": "business"
+    },
+    {
+      "name": "WSJ",
+      "url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
+      "category": "finance"
+    },
+    {
+      "name": "FT",
+      "url": "https://www.ft.com/rss/home/uk",
+      "category": "finance"
+    },
+    {
+      "name": "Bloomberg",
+      "url": "https://feeds.bloomberg.com/markets/news.rss",
+      "category": "finance"
+    },
+    {
+      "name": "Financial Crime News",
+      "url": "https://thefinancialcrimenews.com/feed/",
+      "category": "compliance"
+    },
+    {
+      "name": "Federal Reserve Board",
+      "url": "http://www.federalreserve.gov/feeds/speeches_and_testimony.xml",
+      "category": "compliance"
+    },
+    {
+      "name": "Банк России: События",
+      "url": "https://cbr.ru/rss/eventrss",
+      "category": "compliance"
+    },
+    {
+      "name": "RAPSI",
+      "url": "http://rapsinews.ru/export/rss2/index.xml",
+      "category": "legal"
+    },
+    {
+      "name": "Консультант Плюс",
+      "url": "http://www.consultant.ru/rss/hotdocs.xml",
+      "category": "legal"
+    },
+    {
+      "name": "The Economist: Finance",
+      "url": "https://www.economist.com/finance-and-economics/rss.xml",
+      "category": "finance"
+    },
+    {
+      "name": "The FCPA Compliance Report",
+      "url": "https://fcpacompliancereport.com/feed/",
+      "category": "compliance"
+    },
+    {
+      "name": "Ведомости - Финансы",
+      "url": "https://www.vedomosti.ru/rss/rubric/finance",
+      "category": "finance"
+    },
+    {
+      "name": "Compliance & Enforcement",
+      "url": "https://wp.nyu.edu/compliance_enforcement/feed/",
+      "category": "compliance"
+    },
+    {
+      "name": "The latest tech news, product …",
+      "url": "https://www.cnet.com/rss/all/",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Top technology news, tech issu…",
+      "url": "https://www.cnet.com/rss/news/",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Technology",
+      "url": "http://rss.cnn.com/rss/money_technology.rss",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Tech News",
+      "url": "https://feeds.feedburner.com/daily-star-tech",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Новости, технологии, люди, раз…",
+      "url": "https://enterhub.ru/feed/",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Аналитические обзоры компьютер…",
+      "url": "https://www.ferra.ru/exports/rss.xml",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "SciTech",
+      "url": "https://moxie.foxnews.com/feedburner/scitech.xml",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Tech",
+      "url": "https://moxie.foxnews.com/feedburner/tech.xml",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Business / Tech",
+      "url": "https://www.france24.com/en/business-tech/rss",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Google News: Sci/Tech",
+      "url": "http://news.google.com/news?pz=1&cf=all&ned=us&hl=en&topic=t&output=rss",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Tech",
+      "url": "https://www.huffpost.com/section/technology/feed",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Technology",
+      "url": "http://feeds.feedburner.com/InternetTechnologyRss?format=xml",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Technology",
+      "url": "http://feeds.latimes.com/latimes/technology",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Technology",
+      "url": "http://www.nytimes.com/services/xml/rss/nyt/Technology.xml",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Latest science and technology …",
+      "url": "https://phys.org/rss-feed/",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Nanoscience, Nanotechnolgy, Na…",
+      "url": "https://phys.org/rss-feed/nanotech-news/",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Tech Xplore: Electronic gadget…",
+      "url": "https://techxplore.com/rss-feed/",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Hi-Tech",
+      "url": "http://www.rosinvest.com/newsrubrik_11.rss",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Tech News. Latest Technology a…",
+      "url": "http://feeds.skynews.com/feeds/rss/technology.xml",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Science & technology",
+      "url": "https://www.economist.com/science-and-technology/rss.xml",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Technology",
+      "url": "https://www.theguardian.com/uk/technology/rss",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Гаджеты, технологии и многое д…",
+      "url": "https://wylsa.com/feed/",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Digital guide to discovering f…",
+      "url": "https://www.yamu.lk/feed/",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "Наука и технологии",
+      "url": "http://gazetadaily.ru/category/novosti/science/feed/",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "TechnologyAdvice: Educating, a…",
+      "url": "http://feeds.feedburner.com/technologyadvice/Hnmi",
+      "category": "tech",
+      "priority": "high"
+    },
+    {
+      "name": "TechCrunch: Group-edited blog …",
+      "url": "http://feeds.feedburner.com/TechCrunch/",
+      "category": "tech",
+      "priority": "high"
+    }
+  ]
+}
