@@ -189,6 +189,22 @@ insightflow/
 4. Отправьте изменения: `git push origin feature/amazing-feature`
 5. Создайте Pull Request
 
-## Лицензия
+## License
 
-Этот проект распространяется под лицензией MIT. Подробности смотрите в файле LICENSE.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for full details.
+
+### Key Permissions:
+- ✅ Commercial use
+- ✅ Modification
+- ✅ Distribution
+- ✅ Private use
+
+### Limitations:
+- ❌ Liability
+- ❌ Warranty
+
+### Conditions:
+- © Must include copyright notice
+- © Must include license text
+
+For more information about MIT License, visit [choosealicense.com](https://choosealicense.com/licenses/mit/).
