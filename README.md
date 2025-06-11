@@ -62,13 +62,8 @@ InsightFlow - это сервис, который собирает данные 
 
 3. Отредактируйте файл `.env`, заполнив необходимые параметры:
    ```
-   # OpenRouter для доступа к языковым моделям
-   OPENROUTER_API_KEY=your-api-key
-   OPENROUTER_API_KEY_2=your-backup-api-key
-   
-   # Настройки сайта
-   SITE_URL=https://example.com
-   SITE_NAME=InsightFlow
+   # Подключение RSS
+   RSS_CONFIG_FILE=your_rss_sources.json
    
    # Telegram Bot
    TELEGRAM_BOT_TOKEN=your-telegram-bot-token
@@ -131,32 +126,6 @@ InsightFlow - это сервис, который собирает данные 
 ```bash
 docker-compose exec insightflow-service-rss cat /app/logs/insightflow_latest.log
 ```
-
-### База данных
-
-Проверка состояния базы данных:
-
-```bash
-python check_database.py
-```
-
-### Проверка API-ключей
-
-Тестирование доступности API-ключей:
-
-```python
-from content_classifier import ContentClassifier
-import asyncio
-
-async def test_keys():
-    classifier = ContentClassifier()
-    results = await classifier.test_api_keys()
-    print(results)
-
-asyncio.run(test_keys())
-```
-
-## Разработка
 
 ### Структура проекта
 
