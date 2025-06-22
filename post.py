@@ -75,6 +75,13 @@ class Post(BaseModel):
 
     simhash: Optional[str] = Field(None, description="Computed simhash for dedup")
     object_ids: List[str] = Field(default_factory=list, description="Cubus object ids")
+    relevance: Optional[bool] = Field(None, description="Признак релевантности")
+    relevance_score: Optional[float] = Field(None, description="Оценка релевантности (0–1)")
+    category: Optional[str] = Field(None, description="Классификация: категория")
+    subcategory: Optional[str] = Field(None, description="Классификация: подкатегория")
+    classification_confidence: Optional[float] = Field(None, description="Уверенность классификации")
+    summary: Optional[str] = Field(None, description="Краткое описание (из LM Studio)")
+
 
     # ----- everything else stays here --------------------------------------
     raw: Optional[Any] = Field(None, exclude=True, description="Untouched original")

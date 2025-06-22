@@ -138,7 +138,7 @@ class InsightFlow:
            
            logger.warning(f"Подготовлено {len(posts_data)} постов для анализа")
            for i, post_data in enumerate(posts_data[:3]):
-                logger.warning(f"Post data {i}: {json.dumps(post_data, ensure_ascii=False)[:200]}")
+                logger.warning(f"Post data {i}: {json.dumps(post_data, ensure_ascii=False, default=str)[:200]}")
 
             # Анализируем с помощью LM Studio
            logger.info(f"Отправляем {len(posts_data)} постов на анализ в LM Studio")
