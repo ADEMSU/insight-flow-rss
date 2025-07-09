@@ -5,6 +5,9 @@ import aiohttp
 import time
 import traceback
 from typing import List, Dict, Any, Optional, Tuple
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -230,51 +233,89 @@ class LMStudioClient:
         return relevant, score
 
     async def classify_content(
-        self,
-        post_id: str,
-        title: str,
-        content: str,
-        categories: Dict[str, List[str]],
-    ) -> Tuple[str, str, float]:
+            self,
+            post_id: str,
+            title: str,
+            content: str,
+            categories: Dict[str, List[str]],
+        ) -> Tuple[str, str, float]:
         """Возвращает (category, subcategory, confidence)."""
-        lm_logger.info(f"Классификация {post_id}")
+        from textwrap import dedent
+
         if len(content) > 100_000:
             content = content[:100_000]
+
         categories_str = "\n".join(
             f"{cat}: {', '.join(subs)}" for cat, subs in categories.items()
         )
-        prompt = (
-            "Выбери категорию и подкатегорию из списка. Верни JSON "
-            "{\"category\": str, \"subcategory\": str, \"confidence\": float}.\n\n"
-            f"Список категорий:\n{categories_str}\n\n"
-            f"Заголовок: {title}\nТекст: {content}"
-        )
+
+        prompt = dedent(f"""
+        Ты классифицируешь новостные статьи по строго заданной схеме.
+
+        У тебя есть список категорий и их подкатегорий:
+
+        {categories_str}
+
+        Твоя задача — выбрать наиболее подходящую **категорию** и **подкатегорию** для предложенной статьи, а также оценить степень уверенности (от 0.0 до 1.0).
+
+        Обязательно соблюдай следующие правила:
+        - Выбирай **только из предложенных категорий и подкатегорий**.
+        - Не выдумывай свои категории.
+        - Если подкатегория не подходит, но категория подходит — подкатегорию можно оставить пустой.
+        - Ответ должен быть **строго в формате JSON**:
+        {{
+            "category": "Категория",
+            "subcategory": "Подкатегория",
+            "confidence": 0.87
+        }}
+        - **Не оставляй category пустой**. Если не можешь определить категорию — верни "category": "Прочее" и "subcategory": "".
+
+        Вот текст статьи:
+
+        Заголовок: {title}
+
+        Содержание: {content}
+        """)
+
+        lm_logger.info(f"Классификация {post_id}")
+
         resp = await self._chat_completion(
             prompt,
             temperature=self.classification_temperature,
             model=self.classification_model,
         )
+
         parsed = self._parse_json_response(resp)
+        lm_logger.debug(f"[LM RESPONSE] {post_id}: {parsed}")
+
         if not parsed:
             return "", "", 0.0
-        cat, sub, conf = (
-            parsed.get("category", ""),
-            parsed.get("subcategory", ""),
-            float(parsed.get("confidence", 0.0)),
-        )
-        if cat not in categories or (sub and sub not in categories[cat]):
+
+        cat = parsed.get("category", "").strip()
+        sub = parsed.get("subcategory", "").strip()
+        conf = parsed.get("confidence", 0.0)
+
+        # Проверка соответствия справочнику
+        if cat not in categories:
+            lm_logger.warning(f"[LM INVALID] {post_id} — невалидная категория: {cat}")
             return "", "", 0.0
+
+        if sub and sub not in categories[cat]:
+            lm_logger.warning(f"[LM SUB] {post_id} — подкатегория '{sub}' не в списке для '{cat}'")
+            sub = ""  # принимаем пустую подкатегорию
+
         conf = conf if 0.0 <= conf <= 1.0 else 0.0
         return cat, sub, conf
 
+
     async def analyze_and_summarize(self, posts: list[dict], max_stories: int = 10) -> list:
         """
-        Генерирует краткое содержание для каждого поста.
-        
+        Генерирует краткое содержание для каждого поста отдельно (по одному запросу).
+
         Args:
             posts: список словарей с ключами: post_id, title, content, url (опционально)
             max_stories: максимальное количество историй
-        
+
         Returns:
             список словарей с ключами: post_id, title, summary
         """
@@ -282,41 +323,23 @@ class LMStudioClient:
             lm_logger.warning("Нет постов для суммаризации")
             return []
 
-        # posts уже список словарей, работаем с ним напрямую
-        posts_data = []
+        summaries = []
+
         for i, post in enumerate(posts[:max_stories], 1):
             post_id = post.get("post_id", "").strip()
             title = post.get("title", "").strip()
             content = post.get("content", "").strip()
-            
-            if not post_id:
-                lm_logger.error(f"Пост {i} не имеет post_id! Keys: {list(post.keys())}")
-            
-            if not content:
+
+            if not post_id or not content:
                 continue
-                
-            posts_data.append({
-                "index": i,
-                "id": post_id,
-                "title": title,
-                "content": content[:5000]
-            })
-        
-        # Логируем реальные ID
-        lm_logger.info("Post IDs для анализа:")
-        for data in posts_data:
-            lm_logger.info(f"  - {data['id']}")
 
-        # Берем первый реальный post_id для примера
-        example_id = posts_data[0]['id'] if posts_data else "rss_29c76252fc46c217f7bba797278a4191"
-
-        # Формируем промпт с примером
-        prompt = f"""Проанализируй тексты ниже и создай краткие саммари на русском языке.
+            prompt = f"""
+    Проанализируй тексты ниже и создай краткие саммари на русском языке.
 
     ПРИМЕР ПРАВИЛЬНОГО ОТВЕТА:
     [
     {{
-        "post_id": "{example_id}",
+        "post_id": "{post_id}",
         "title": "Заголовок статьи на русском языке",
         "summary": "Краткое содержание статьи на русском языке. Основные моменты и выводы в 5-7 предложений."
     }}
@@ -329,71 +352,36 @@ class LMStudioClient:
     4. Верни ТОЛЬКО JSON массив
 
     ТЕКСТЫ ДЛЯ АНАЛИЗА:
+    ============================================================
+    Текст №{i}
+    ID: {post_id}
+    Заголовок: {title}
+    Содержание: {content[:5000]}
+    ============================================================
+
+    Создай JSON массив для текста выше:
     """
 
-        # Добавляем посты в простом формате
-        for data in posts_data:
-            prompt += f"\n{'='*60}\n"
-            prompt += f"Текст №{data['index']}\n"
-            prompt += f"ID: {data['id']}\n"
-            prompt += f"Заголовок: {data['title']}\n"
-            prompt += f"Содержание: {data['content']}\n"
+            lm_logger.info(f"📄 Анализ поста {i}/{max_stories} — ID: {post_id}")
+            resp = await self._chat_completion(
+                prompt,
+                temperature=self.analysis_temperature,
+                max_tokens=1024,
+                model=self.analysis_model,
+            )
 
-        prompt += f"\n{'='*60}\n\nСоздай JSON массив для всех текстов выше:"
-
-        resp = await self._chat_completion(
-            prompt,
-            temperature=self.analysis_temperature,
-            max_tokens=2048,
-            model=self.analysis_model,
-        )
-
-        if not resp:
-            lm_logger.error("Не получен ответ от LM Studio")
-            return []
-
-        content = self._extract_content(resp)
-        if not content:
-            lm_logger.error("Пустой контент в ответе")
-            return []
-
-        # Парсим ответ
-        try:
-            # Убираем markdown блоки если есть
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0]
-            
-            content = content.strip()
-            parsed = json.loads(content)
-            
-            if isinstance(parsed, list):
-                # Валидируем и логируем результаты
-                valid_posts = []
-                expected_ids = {data['id'] for data in posts_data}
-                
-                for item in parsed:
-                    post_id = item.get('post_id', '')
-                    if post_id in expected_ids:
-                        valid_posts.append(item)
-                        lm_logger.info(f"✅ Валидный post_id: {post_id}")
-                    else:
-                        lm_logger.warning(f"❌ Невалидный post_id: {post_id}")
-                
-                if not valid_posts and parsed:
-                    lm_logger.error("Все post_id невалидные, возвращаем как есть для отладки")
-                    return parsed
-                    
-                return valid_posts
+            parsed = self._parse_json_response(resp)
+            if isinstance(parsed, list) and parsed and "summary" in parsed[0]:
+                summaries.append(parsed[0])
+                lm_logger.info(f"✅ Пост {post_id} обработан")
+            elif isinstance(parsed, dict) and "summary" in parsed:
+                summaries.append(parsed)
+                lm_logger.info(f"✅ Пост {post_id} обработан (dict)")
             else:
-                lm_logger.error(f"Ответ не является списком: {type(parsed)}")
-                return []
-                
-        except json.JSONDecodeError as e:
-            lm_logger.error(f"Ошибка парсинга JSON: {e}")
-            lm_logger.error(f"Контент: {content[:500]}...")
-            return []
+                lm_logger.warning(f"❌ Ответ не распознан для post_id: {post_id}")
+
+        return summaries
+
 
     # --------------------------- Service API ------------------------------
     async def test_connection(self) -> bool:
@@ -422,3 +410,115 @@ class LMStudioClient:
         except Exception as exc:  # noqa: BLE001
             lm_logger.error(f"get_models error: {exc}")
         return []
+
+    # --------------------------- top relevance ------------------------------
+    async def select_top_posts(self, posts: list[dict], top_n: int = 5) -> list[dict]:
+        """
+        Отбор до 5 наиболее значимых и непохожих друг на друга постов среди релевантных.
+
+        Этапы:
+        1. Удаление дубликатов (в том числе по смыслу)
+        2. Повторная проверка релевантности (строгая)
+        3. Выбор наиболее разнообразных и релевантных постов
+        """
+        if not posts:
+            lm_logger.warning("Нет постов для повторного анализа")
+            return []
+
+        # Шаг 1. Удаляем дубликаты по смыслу
+        contents = [p["content"] for p in posts]
+        vectorizer = TfidfVectorizer().fit_transform(contents)
+        similarity_matrix = cosine_similarity(vectorizer)
+        np.fill_diagonal(similarity_matrix, 0)
+
+        unique_indices = []
+        for i, row in enumerate(similarity_matrix):
+            if all(similarity_matrix[i, j] < 0.9 for j in unique_indices):
+                unique_indices.append(i)
+
+        unique_posts = [posts[i] for i in unique_indices]
+        lm_logger.info(f"Уникальных постов после фильтра по смыслу: {len(unique_posts)}")
+
+        # Шаг 2. Повторная строгая проверка релевантности
+        rechecked = []
+        for post in unique_posts:
+            try:
+                relevant, score = await self.check_relevance(
+                    post_id=post["post_id"],
+                    title=post["title"],
+                    content=post["content"],
+                )
+                if relevant:
+                    post["score"] = score
+                    rechecked.append(post)
+            except Exception as e:
+                lm_logger.warning(f"Ошибка при повторной проверке релевантности: {e}")
+
+        if not rechecked:
+            lm_logger.warning("Нет постов, прошедших повторную релевантность")
+            return []
+
+        # Шаг 3. Отбор наиболее непохожих (diverse) постов с наибольшим score
+        rechecked.sort(key=lambda x: x["score"], reverse=True)
+        selected = []
+        selected_vectors = []
+
+        tfidf = TfidfVectorizer().fit([p["content"] for p in rechecked])
+        for post in rechecked:
+            vec = tfidf.transform([post["content"]])
+            if all(cosine_similarity(vec, v)[0][0] < 0.8 for v in selected_vectors):
+                selected.append(post)
+                selected_vectors.append(vec)
+            if len(selected) >= top_n:
+                break
+
+        lm_logger.info(f"Финально отобрано {len(selected)} постов для Telegram")
+        return selected
+
+     # --------------------------- new relevance ------------------------------
+    async def recheck_relevance_strict(self, posts: list[dict]) -> list[dict]:
+        """
+        Повторная проверка релевантности с более жёсткими критериями.
+        Возвращает только те посты, которые прошли порог.
+        """
+        lm_logger.info(f"Повторная проверка релевантности: {len(posts)} постов")
+        filtered = []
+
+        for i, post in enumerate(posts, 1):
+            post_id = post.get("post_id", "")
+            title = post.get("title", "")
+            content = post.get("content", "")
+            if not content:
+                continue
+
+            prompt = f"""
+    Оцени строго, релевантен ли текст следующим темам:
+
+    1. KYC/AML/Compliance
+    2. Санкции и проверки
+    3. Репутационные риски
+    4. Технологии интернет-поиска
+
+    ИСКЛЮЧЕНИЯ:
+    - спорт, шоу-бизнес, развлечения
+
+    Ответ в JSON:
+    {{ "relevant": true/false, "score": float, "reason": str }}
+
+    Заголовок: {title}
+    Текст: {content[:3000]}
+    """
+
+            lm_logger.info(f"🔁 Повторная проверка: {post_id} ({i}/{len(posts)})")
+            resp = await self._chat_completion(
+                prompt,
+                temperature=self.relevance_temperature,
+                max_tokens=512,
+                model=self.relevance_model,
+            )
+            parsed = self._parse_json_response(resp)
+            if parsed and parsed.get("relevant") and float(parsed.get("score", 0)) >= 0.7:
+                filtered.append(post)
+
+        lm_logger.info(f"✅ Повторно релевантных: {len(filtered)} из {len(posts)}")
+        return filtered

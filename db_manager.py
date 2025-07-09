@@ -126,23 +126,24 @@ class DBManager:
         with self.SessionLocal() as session:
             for post in posts:
                 try:
-                    record = PostModel(
+                    session.add(PostModel(
                         post_id=post.post_id,
-                        title=post.title,
-                        content=post.content,
-                        url=post.url,
-                        blog_host=post.blog_host,
-                        blog_host_type=post.blog_host_type,
+                        title=post.title or "",
+                        content=post.content or "",
+                        blog_host=post.blog_host or "",
+                        blog_host_type=post.blog_host_type.value if post.blog_host_type else 0,
+                        url=post.url or "",
                         published_on=post.published_on,
-                        simhash=post.simhash,
-                    )
-                    session.add(record)
-                    session.flush()  # Проверяем уникальность
-                    saved += 1
-                except IntegrityError:
-                    session.rollback()  # Откатываем только текущий пост
-                    DB_LOGGER.debug(f"Пост {post.post_id} уже существует, пропускаем")
-                    continue
+                        simhash=post.simhash or "",
+                        html_content=post.html_content,
+                    ))
+                    session.commit()
+                    inserted += 1
+                except Exception as e:
+                    session.rollback()
+                    logger.warning(f"❌ Ошибка при добавлении поста post_id={post.post_id}, url={post.url}")
+                    logger.warning(f"Причина: {e}")
+
             
             session.commit()
             DB_LOGGER.info(f"save_posts_bulk: сохранено {saved} из {len(posts)} постов")
@@ -344,7 +345,7 @@ class DBManager:
 
 
 
-    def get_unchecked_posts(self, limit: int = 50) -> List[PostModel]:
+    def get_unchecked_posts(self, limit: int = None) -> List[PostModel]:
         """Посты, где relevance ещё не определён."""
         stmt = (
             select(PostModel)
@@ -357,20 +358,18 @@ class DBManager:
             DB_LOGGER.debug("get_unchecked_posts: %s строк (limit=%s)", len(rows), limit)
             return rows
 
-    def get_relevant_unclassified_posts(self, limit: int = 50) -> List[PostModel]:
-        """relevance=True & category IS NULL."""
-        stmt = (
-            select(PostModel)
-            .where(PostModel.relevance.is_(True), PostModel.category.is_(None))
-            .order_by(PostModel.published_on.desc())
-            .limit(limit)
-        )
+    def get_relevant_unclassified_posts(self, limit: Optional[int] = None):
+        stmt = select(PostModel).where(
+            PostModel.relevance.is_(True),
+            PostModel.relevance_score >= 0.7,
+            PostModel.category.is_(None)
+        ).order_by(PostModel.published_on.desc())
+
+        if limit is not None:
+            stmt = stmt.limit(limit)
+
         with self.session_scope() as session:
-            rows = session.scalars(stmt).all()
-            DB_LOGGER.debug(
-                "get_relevant_unclassified_posts: %s строк (limit=%s)", len(rows), limit
-            )
-            return rows
+            return session.scalars(stmt).all()
 
     def get_relevant_posts(
         self,
@@ -516,3 +515,12 @@ class DBManager:
     def add_rss_sources(self, sources: List[Dict]):
         """Заглушка под отдельную таблицу `rss_sources`."""
         pass
+
+    def delete_irrelevant_posts(self):
+        from sqlalchemy import delete
+        from models import PostModel
+
+        stmt = delete(PostModel).where(PostModel.relevance.is_(False))
+        with self.session_scope() as session:
+            result = session.execute(stmt)
+            DB_LOGGER.info(f"Удалено {result.rowcount} нерелевантных постов")

@@ -194,54 +194,56 @@ class TextPreprocessor:
     def filter_by_global_similarity(self, posts):
         """
         Фильтр 2: Применяет фильтрацию по сходству ко всем оставшимся постам
-        с более низким порогом сходства для более агрессивной фильтрации
-        
-        Args:
-            posts (list): Список объектов Post после фильтра 1
-            
-        Returns:
-            list: Список отфильтрованных постов
+        с более низким порогом сходства для более агрессивной фильтрации,
+        но сохраняет посты с высокой релевантностью (score > 0.7)
         """
         if not posts:
             return []
-        
-        # Подготавливаем тексты и идентификаторы
+
+        # Подготовка текстов
         all_texts = []
         all_post_ids = []
-        
+        id_to_post = {}
+
         for post in posts:
-            # Объединяем заголовок и содержимое для анализа
             post_text = f"{post.title or ''} {post.content or ''}".strip()
-            if post_text:  # Исключаем пустые тексты
+            if post_text:
                 all_texts.append(post_text)
                 all_post_ids.append(post.post_id)
-        
-        # Применяем глобальную фильтрацию с более низким порогом сходства (более агрессивная фильтрация)
-        # Используем более низкий порог, чем на первом этапе
-        stricter_threshold = self.similarity_threshold - 0.05  # На 0.05 ниже чем основной порог
+                id_to_post[post.post_id] = post
+
+        # Сохраняем ID релевантных постов (score > 0.7)
+        protected_ids = set()
+        for post in posts:
+            if hasattr(post, "relevance_score") and (post.relevance_score or 0.0) > 0.7:
+                protected_ids.add(post.post_id)
+
+        # Временное понижение порога
+        stricter_threshold = self.similarity_threshold - 0.05
         original_threshold = self.similarity_threshold
-        self.similarity_threshold = max(0.6, stricter_threshold)  # Но не ниже 0.6
-        
+        self.similarity_threshold = max(0.6, stricter_threshold)
+
         logger.info(f"Глобальная фильтрация с порогом сходства: {self.similarity_threshold} (было {original_threshold})")
-        
+
         _, unique_post_ids = self._filter_by_similarity(all_texts, all_post_ids)
-        
-        # Восстанавливаем исходный порог
+
+        # Восстановление порога
         self.similarity_threshold = original_threshold
-        
-        # Фильтруем финальный набор постов
-        filtered_posts = [post for post in posts if post.post_id in unique_post_ids]
-        
+
+        # Добавляем защищённые ID обратно
+        final_ids = set(unique_post_ids).union(protected_ids)
+
+        filtered_posts = [id_to_post[pid] for pid in final_ids if pid in id_to_post]
+
         logger.info(f"После фильтра 2: осталось {len(filtered_posts)} постов из {len(posts)} после фильтра 1")
-        
-        # Если фильтрация оказалась слишком агрессивной, возьмем хотя бы 10 постов
+
         if len(filtered_posts) < 10 and len(posts) > 10:
-            logger.warning(f"Фильтрация слишком агрессивна, выбираем топ-10 длинных постов")
-            # Сортируем по длине контента (от большего к меньшему)
+            logger.warning("Фильтрация слишком агрессивна, добавляем топ-10 самых длинных постов")
             sorted_posts = sorted(posts, key=lambda p: len(p.content or "") + len(p.title or ""), reverse=True)
             return sorted_posts[:10]
-            
+
         return filtered_posts
+
 
     def limit_tokens(self, posts, prompt_example=""):
         """
@@ -326,3 +328,24 @@ class TextPreprocessor:
         
         logger.info(f"Итоговое количество постов после обработки: {len(filtered_posts)}")
         return filtered_posts
+    
+    def remove_duplicates(self, posts: list[dict]) -> list[dict]:
+        """
+        Удаляет дубликаты по смыслу из списка словарей с ключами 'title' и 'content'.
+        Использует TF-IDF + cosine similarity.
+        """
+        if not posts:
+            return []
+        texts = [f"{p['title']} {p['content']}".strip() for p in posts]
+        vectorizer = self.vectorizer.fit_transform(texts)
+        cosine_sim = cosine_similarity(vectorizer)
+        np.fill_diagonal(cosine_sim, 0)
+
+        unique_indices = []
+        for i in range(len(posts)):
+            if all(cosine_sim[i, j] < self.similarity_threshold for j in unique_indices):
+                unique_indices.append(i)
+
+        logger.info(f"Удалено дубликатов: {len(posts) - len(unique_indices)} из {len(posts)}")
+        return [posts[i] for i in unique_indices]
+

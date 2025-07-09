@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     software-properties-common \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Устанавливаем рабочую директорию
@@ -24,6 +25,9 @@ RUN mkdir -p /app/data /app/logs
 
 # Устанавливаем права доступа
 RUN chmod +x scheduler.py
+
+# Устанавливаем часовой пояс
+ENV TZ=Europe/Moscow
 
 # Volumes для постоянного хранения данных
 VOLUME ["/app/data", "/app/logs"]

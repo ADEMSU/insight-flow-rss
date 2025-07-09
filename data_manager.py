@@ -7,8 +7,9 @@ from loguru import logger
 from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
 
-# Импортируем модуль для работы с RSS
+# Импортируем модуль для работы с RSS и Медиалогией
 from rss_manager import RSSManager
+from mlg_manager import MlgManager
 from post import Post
 
 # Загрузка переменных окружения
@@ -62,45 +63,54 @@ class DataManager:
             logger.error(f"Ошибка при инициализации RSS-менеджера: {e}")
             logger.error(traceback.format_exc())
     
+        # Инициализация MlgManager
+        self.mlg_manager = None
+        try:
+            self.mlg_manager = MlgManager()
+            logger.info("MlgManager успешно инициализирован")
+        except Exception as e:
+            logger.error(f"Ошибка при инициализации MlgManager: {e}")
+            logger.debug(traceback.format_exc())
+
     async def fetch_posts(self, date_from=None, date_to=None):
         """
-        Получает посты из RSS за указанный период
-        
-        Args:
-            date_from (datetime, optional): Начальная дата
-            date_to (datetime, optional): Конечная дата
-            
-        Returns:
-            list: Список объектов Post
+        Получает посты из RSS и Медиалогии за указанный период
         """
-        # Инициализируем список постов
         posts = []
-        
-        # Если даты не указаны, используем стандартный диапазон
+
         if date_from is None or date_to is None:
             date_from, date_to = get_msk_date_range()
             logger.info(f"Используем стандартный диапазон дат: {date_from} - {date_to}")
-        
-        # Получаем данные из RSS, если RSS-менеджер инициализирован
+
+        # --- RSS ---
+        rss_posts = []
         if self.rss_manager:
             try:
                 rss_posts = await self.rss_manager.get_posts(date_from, date_to)
-                if rss_posts:
-                    posts.extend(rss_posts)
-                    logger.info(f"Получено {len(rss_posts)} постов из RSS-источников")
-                else:
-                    logger.warning("Не получено постов из RSS-источников")
+                logger.info(f"Получено {len(rss_posts)} постов из RSS")
+                posts.extend(rss_posts)
             except Exception as e:
-                logger.error(f"Ошибка при получении постов из RSS: {e}")
-                logger.error(traceback.format_exc())
+                logger.error(f"Ошибка получения постов из RSS: {e}")
+                logger.debug(traceback.format_exc())
         else:
-            logger.warning("RSS-менеджер не инициализирован")
-        
-        # Здесь можно добавить получение данных из других источников
-        # ...
-        
-        logger.info(f"Всего получено {len(posts)} постов")
+            logger.warning("RSSManager не инициализирован")
+
+        # --- Медиалогия ---
+        mlg_posts = []
+        if self.mlg_manager:
+            try:
+                mlg_posts = self.mlg_manager.get_posts(date_from, date_to)
+                logger.info(f"Получено {len(mlg_posts)} постов из Медиалогии")
+                posts.extend(mlg_posts)
+            except Exception as e:
+                logger.error(f"Ошибка получения постов из Медиалогии: {e}")
+                logger.debug(traceback.format_exc())
+        else:
+            logger.warning("MlgManager не инициализирован")
+
+        logger.info(f"Всего объединено {len(posts)} постов (RSS + Медиалогия)")
         return posts
+
      
 
     async def save_posts_to_file(self, posts, date, suffix=""):

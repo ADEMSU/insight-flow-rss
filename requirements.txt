@@ -12,7 +12,7 @@ alembic==1.13.1
 feedparser==6.0.10
 aiohttp==3.9.3
 requests==2.31.0
-beautifulsoup4==4.12.3  
+beautifulsoup4>=4.12 
 lxml==5.1.0  
 
 # Data processing
@@ -45,3 +45,5 @@ html5lib==1.1
 chardet==5.2.0  
 
 apscheduler>=3.10
+zeep>=4.1.0
+simhash
