@@ -76,8 +76,8 @@ InsightFlow — это сервис, который собирает данны�
    # PostgreSQL настройки
    POSTGRES_HOST=postgres
    POSTGRES_PORT=5432
-   POSTGRES_DB=insightflow
-   POSTGRES_USER=insightflow
+   POSTGRES_DB=bd
+   POSTGRES_USER=bd
    POSTGRES_PASSWORD=your-secure-password
    ```
 
