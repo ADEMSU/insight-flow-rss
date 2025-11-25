@@ -3,6 +3,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from collections import defaultdict
 from loguru import logger
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+import unicodedata
+import re
+from difflib import SequenceMatcher
 
 # Импортируем существующий класс Post
 from post import Post
@@ -348,4 +352,137 @@ class TextPreprocessor:
 
         logger.info(f"Удалено дубликатов: {len(posts) - len(unique_indices)} из {len(posts)}")
         return [posts[i] for i in unique_indices]
+
+    # -------------------- Final dedupe for summaries --------------------
+    def _canonicalize_url(self, url: str) -> str:
+        if not url:
+            return ""
+        try:
+            u = url.strip()
+            u = u.replace("\u200b", "")  # zero width
+            parsed = urlparse(u)
+            scheme = parsed.scheme.lower() or "http"
+            netloc = parsed.netloc.lower()
+            # drop leading m.
+            if netloc.startswith("m."):
+                netloc = netloc[2:]
+            path = re.sub(r"/+", "/", parsed.path or "/").rstrip("/")
+            # clean query params
+            params = []
+            for k, v in parse_qsl(parsed.query, keep_blank_values=False):
+                if k.lower().startswith("utm_") or k.lower() in {"clid", "from", "ref", "fbclid"}:
+                    continue
+                if k and v:
+                    params.append((k, v))
+            # sort for stability
+            params.sort()
+            query = urlencode(params)
+            fragment = ""  # drop anchors
+            return urlunparse((scheme, netloc, path, "", query, fragment))
+        except Exception:
+            return url.strip().lower()
+
+    def _normalize_title(self, title: str) -> str:
+        if not title:
+            return ""
+        t = unicodedata.normalize("NFKC", title).lower()
+        t = t.replace("«", '"').replace("»", '"')
+        t = t.replace("“", '"').replace("”", '"')
+        t = t.replace("—", "-").replace("–", "-")
+        t = re.sub(r"[\s\u00A0]+", " ", t).strip()
+        return t
+
+    def _title_similarity(self, a: str, b: str) -> float:
+        a_n = self._normalize_title(a)
+        b_n = self._normalize_title(b)
+        if not a_n or not b_n:
+            return 0.0
+        return SequenceMatcher(None, a_n, b_n).ratio()
+
+    def _post_id_key(self, post_id: str):
+        # for ordering: numeric if both numeric else string
+        try:
+            return int(post_id)
+        except Exception:
+            return str(post_id)
+
+    def dedupe_summaries(self, stories: list[dict], title_threshold: float = 0.85, content_threshold: float = 0.70) -> list[dict]:
+        """
+        Финальный отбор уникальных сюжетов перед отправкой:
+        - быстрый этап по канонизированному URL (оставляем первый по post_id)
+        - контентная кластеризация по title+summary с порогами сходства
+        Возвращает список сюжетов без дублей.
+        Ожидаемые ключи: post_id, title, summary (или content), url
+        """
+        if not stories:
+            return []
+
+        # 1) Группировка по URL
+        groups = defaultdict(list)
+        for idx, s in enumerate(stories):
+            can_url = self._canonicalize_url(s.get("url", ""))
+            groups[can_url].append((idx, s))
+
+        kept_indices = set()
+        for can_url, items in groups.items():
+            if not items:
+                continue
+            # выбрать первый по post_id
+            items_sorted = sorted(items, key=lambda x: self._post_id_key(x[1].get("post_id", "")))
+            kept_indices.add(items_sorted[0][0])
+
+        # 2) Контентная кластеризация остатка
+        candidates = [(i, stories[i]) for i in range(len(stories)) if i in kept_indices or not self._canonicalize_url(stories[i].get("url", ""))]
+        # Объединить уже выбранные и остальные без URL (или пустого URL)
+        # Сохраним порядок исходных индексов
+        # Подготовка текстов
+        texts = []
+        ids = []
+        titles = []
+        orig_indices = []
+        for idx, s in candidates:
+            title = s.get("title", "")
+            summary = s.get("summary") or s.get("content") or ""
+            texts.append(f"{title} {summary}".strip())
+            ids.append(s.get("post_id", ""))
+            titles.append(title)
+            orig_indices.append(idx)
+
+        if not texts:
+            return []
+
+        try:
+            tfidf = self.vectorizer.fit_transform(texts)
+            sim = cosine_similarity(tfidf)
+            np.fill_diagonal(sim, 0)
+        except Exception as e:
+            logger.warning(f"dedupe_summaries: TF-IDF ошибка, пропускаю контентное слияние: {e}")
+            # вернуть по одному на URL-группу (kept_indices), в порядке появления
+            result_indices = sorted(list(kept_indices))
+            return [stories[i] for i in result_indices]
+
+        used = set()
+        representatives = []  # индексы в stories
+
+        # сортировка по post_id, чтобы первый по id становился репрезентативным
+        order = sorted(range(len(ids)), key=lambda k: self._post_id_key(ids[k]))
+
+        for oi in order:
+            if oi in used:
+                continue
+            # текущий становится представителем
+            used.add(oi)
+            representatives.append(orig_indices[oi])
+            # отметить схожие как дубликаты при выполнении порогов
+            for oj in range(len(ids)):
+                if oj in used:
+                    continue
+                # проверка порогов
+                title_sim = self._title_similarity(titles[oi], titles[oj])
+                if title_sim >= title_threshold and sim[oi, oj] >= content_threshold:
+                    used.add(oj)
+
+        # вернуть сюжеты в порядке исходного появления представителей
+        representatives.sort()
+        return [stories[i] for i in representatives]
 

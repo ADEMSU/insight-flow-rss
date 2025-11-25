@@ -821,18 +821,27 @@ class RSSManager:
         Настраивает специализированное логирование для RSS-компонента
         """
         # Создаем отдельный лог-файл для RSS
-        log_path = "/app/logs/rss_manager_{time}.log"
+
+        logs_dir = os.path.join(os.getcwd(), "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        log_path = os.path.join(logs_dir, "rss_manager_{time}.log")
         
         # Добавляем логгер с дополнительной информацией
         logger.add(
-            log_path, 
-            rotation="10 MB", 
+            log_path,
+            rotation="10 MB",
+            retention="21 days",
+            encoding="utf-8",
+            enqueue=True,
+            backtrace=False,
+            diagnose=False,
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}",
-            level="INFO"
+            level="INFO",
         )
         
         # Создаем файл со статистикой RSS-запросов
-        self.stats_file = "/app/logs/rss_stats.csv"
+
+        self.stats_file = os.path.join(logs_dir, "rss_stats.csv")
         
         # Если файл не существует, создаем его с заголовками
         if not os.path.exists(self.stats_file):
@@ -1104,3 +1113,5 @@ async def fetch_all_rss() -> list[Post]:
     now = datetime.now(tz=ZoneInfo("Europe/Moscow"))
     date_from = now - timedelta(days=2)
     return await manager.get_posts(date_from=date_from, date_to=now)
+
+

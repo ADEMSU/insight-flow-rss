@@ -1,36 +1,37 @@
 FROM python:3.10-slim
 
-# Устанавливаем системные зависимости
-RUN apt-get update && apt-get install -y \
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Europe/Moscow \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Базовые системные пакеты. libxml2/libxslt — на случай lxml/zeep.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
-    software-properties-common \
+    ca-certificates \
     tzdata \
-    && rm -rf /var/lib/apt/lists/*
+    libxml2 \
+    libxslt1.1 \
+ && rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем файлы проекта
+# Сначала ставим зависимости — лучше кэш
+COPY requirements.txt ./
+RUN python -m pip install --upgrade pip setuptools wheel \
+ && pip install --no-cache-dir -r requirements.txt
+
+# Потом код
 COPY . .
 
-# Копируем .env файл
-COPY .env.example .env
-
-# Устанавливаем зависимости Python
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Создаем директории для данных и логов
+# Каталоги под тома (хотя вы и так монтируете их томами/volume в compose)
 RUN mkdir -p /app/data /app/logs
 
-# Устанавливаем права доступа
-RUN chmod +x scheduler.py
+# Если нужно — делаем файл исполняемым
+RUN chmod +x scheduler.py || true
 
-# Устанавливаем часовой пояс
-ENV TZ=Europe/Moscow
-
-# Volumes для постоянного хранения данных
 VOLUME ["/app/data", "/app/logs"]
 
-# Запускаем планировщик
 CMD ["python", "scheduler.py"]

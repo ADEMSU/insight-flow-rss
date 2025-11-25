@@ -7,6 +7,7 @@ import asyncio
 import json
 
 from loguru import logger
+from stats_collector import StatsCollector
 from dotenv import load_dotenv
 
 # Импортируем созданные и обновленные модули
@@ -24,7 +25,18 @@ load_dotenv()
 # Настройка логирования
 logger.remove()
 logger.add(sys.stderr, level="INFO")
-logger.add("/app/logs/insightflow_{time}.log", rotation="10 MB", level="INFO")
+logs_dir = os.path.join(os.getcwd(), "logs")
+os.makedirs(logs_dir, exist_ok=True)
+logger.add(
+    os.path.join(logs_dir, "insightflow_{time}.log"),
+    rotation="10 MB",
+    retention="21 days",
+    encoding="utf-8",
+    enqueue=True,
+    backtrace=False,
+    diagnose=False,
+    level="INFO",
+)
 
 
 class InsightFlow:
@@ -104,9 +116,29 @@ class InsightFlow:
             summaries = await self.lm_client.analyze_and_summarize(top_posts)
 
             if summaries:
+                # Финальный дедуп сюжетов перед отправкой в Telegram
+                try:
+                    deduped = self.text_preprocessor.dedupe_summaries(
+                        summaries, title_threshold=0.85, content_threshold=0.70
+                    )
+                    logger.info(f"Финальный дедуп: {len(summaries)} → {len(deduped)}")
+                except Exception as e:
+                    logger.warning(f"Ошибка финального дедупа, отправляем как есть: {e}")
+                    deduped = summaries
+
                 mapping = self.db_manager.create_post_mapping_from_db(db_posts)
-                await self.telegram_sender.send_analysis(summaries, mapping)
+                await self.telegram_sender.send_analysis(deduped, mapping)
                 self.db_manager.update_post_summaries(summaries)
+                # Обновить и сохранить метрики (день/неделя/месяц) в месячный JSON
+                try:
+                    from zoneinfo import ZoneInfo
+                    day = datetime.now(ZoneInfo("Europe/Moscow")).date()
+                    sc = StatsCollector()
+                    sc.reset()
+                    sc.scan_logs_for_date(logs_dir, day)
+                    sc.flush_monthly(logs_dir, day)
+                except Exception as se:
+                    logger.warning(f"Не удалось сформировать сводку метрик: {se}")
                 logger.info("✅ Результаты анализа отправлены и сохранены")
 
             else:

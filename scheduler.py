@@ -11,6 +11,7 @@ from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 
 from insightflow_service import InsightFlow
+from log_utils import clean_old_logs
 from relevance_checker import RelevanceChecker
 from content_classifier import classify_relevant_posts_task
 from data_manager import DataManager  # для fetch_posts
@@ -57,9 +58,14 @@ def _configure_scheduler() -> AsyncIOScheduler:
     # Добавляем задачи по расписанию
     scheduler.add_job(hourly_pipeline, CronTrigger(minute=0))
     scheduler.add_job(daily_digest, CronTrigger(hour=9, minute=30))
+    # Weekly cleanup: Sunday 23:59 MSK, keep last 3 weeks
+    def _cleanup_job():
+        logs_dir = os.path.join(os.getcwd(), "logs")
+        clean_old_logs(logs_dir, keep_days=21)
+    scheduler.add_job(_cleanup_job, CronTrigger(day_of_week='sun', hour=23, minute=59))
 
     scheduler.start()
-    logger.info("Scheduler started: hourly + daily digest at 09:00 MSK")
+    logger.info("Scheduler started: hourly + daily digest at 09:30 MSK + weekly log cleanup Sun 23:59 MSK")
     return scheduler
 
 
